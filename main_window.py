@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
 
         self._setup_ui()
         self._apply_loaded_params()
+        self._connect_param_signals()
         self._setup_status_bar()
 
         # Apply QSS LAST — after all widgets exist, nothing overrides it
@@ -54,6 +55,20 @@ class MainWindow(QMainWindow):
         self._mv.setValue(p["source_value"])
         self._mn.setValue(p["nplc"])
         self._sr.setValue(p["sample_rate"])
+
+    def _connect_param_signals(self):
+        """Connect parameter widgets to auto-save on every change.
+
+        Connected AFTER ``_apply_loaded_params()`` so that loading saved
+        values does not trigger a redundant first write.
+        """
+        self._si.valueChanged.connect(self._save)
+        self._sa.valueChanged.connect(self._save)
+        self._sw.valueChanged.connect(self._save)
+        self._mc.currentIndexChanged.connect(self._save)
+        self._mv.valueChanged.connect(self._save)
+        self._mn.valueChanged.connect(self._save)
+        self._sr.valueChanged.connect(self._save)
 
     def _setup_ui(self):
         central = QWidget()

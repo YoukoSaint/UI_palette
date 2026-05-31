@@ -2,8 +2,28 @@
 """Settings persistence — save/load all user preferences to JSON"""
 import json
 import os
+import sys
 
-SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
+
+def _get_settings_dir() -> str:
+    """Return the writable directory for settings.json.
+
+    In development (``python main_window.py``), ``__file__`` points to the
+    project directory so settings are written alongside the source.
+
+    When compiled with PyInstaller (``sys.frozen`` is True), ``__file__``
+    points inside the *temporary* extraction directory which is deleted on
+    exit.  We therefore resolve to the directory containing the executable,
+    which is persistent and writable.
+    """
+    if getattr(sys, "frozen", False):
+        # Compiled — write settings next to the .exe
+        return os.path.dirname(sys.executable)
+    # Development — write settings in the project directory
+    return os.path.dirname(__file__)
+
+
+SETTINGS_FILE = os.path.join(_get_settings_dir(), "settings.json")
 
 DEFAULTS = {
     "colors": {
