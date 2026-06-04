@@ -2,33 +2,31 @@
 """
 4 色动态配色方案 + QSS 生成 + 图表颜色
 基础 4 色: TEXT(文字), LIGHT(浅色), DARK(深色), LINE(线条)
-图表 5 色: 全部可自定义
+图表 3 色: 全部可自定义
 """
 import re
 
 HEX_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
 ROLES_BASE = ["TEXT", "LIGHT", "DARK", "LINE"]
-ROLES_CHART = ["SPECTRUM", "TREND", "VOLTAGE", "CURRENT", "RESISTANCE"]
+ROLES_CHART = ["SPECTRUM", "TREND", "RESISTANCE"]
 
 
 class ColorScheme:
     """动态配色方案"""
 
-    # 基础 4 色
+    # 基础 4 色 — 驱动整套 QSS
     TEXT = "#c0caf5"     # 文字色
     LIGHT = "#1e1f2e"    # 浅色区 (面板/卡片)
     DARK = "#1a1b26"     # 深色区 (主背景)
     LINE = "#3b3d56"     # 线条/边框
 
-    # 图表曲线色
+    # 图表曲线色 — 每条曲线一个用户可管理色
     SPECTRUM = "#0db9d7"   # 光谱曲线
     TREND = "#bb9af7"      # 波段趋势
-    VOLTAGE = "#7aa2f7"    # 电压
-    CURRENT = "#9ece6a"    # 电流
     RESISTANCE = "#f7768e" # 电阻
 
-    # 固定辅助色
+    # 固定辅助色 (不暴露给用户)
     GRID = "#2c2d3f"
     AXIS = "#565f89"
 

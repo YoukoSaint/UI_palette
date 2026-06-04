@@ -12,6 +12,52 @@ Each color is independently adjustable via **HEX input** or **system color picke
 
 ---
 
+## Design Philosophy
+
+> **颜色可以少，但是一定要都有被用户管理的接口**
+> *(Colors can be few, but every one of them must have a user-manageable interface.)*
+
+This is the project's single most important rule. It applies in both directions:
+
+- **Don't add a color the user cannot manage.** If it's hidden in code, the user has no way to change it — the customization promise is broken.
+- **Don't expose a color the user cannot see.** If a knob is in the panel but no widget actually uses that color, the user is adjusting a phantom.
+
+Concretely, **every** color in `ColorScheme` must satisfy all three conditions:
+
+| Layer | Required |
+|-------|----------|
+| `color_scheme.py` | Defined as a class attribute (single source of truth) |
+| `color_panel.py` | Has a `ColorPickerRow` with swatch + HEX + 🎨 button |
+| `settings_manager.py` | Listed in `DEFAULTS["colors"]` for persistence |
+| UI / chart consumer | Actually rendered (QSS rule, pen, or brush) |
+
+If any one is missing, the project is in a violated state — either remove the orphan or wire it up. The user has explicitly endorsed trimming the palette when needed ("颜色可以少"), so reducing color count to maintain integrity is preferred over carrying dead entries.
+
+### Conformance Check
+
+Run this before committing color-related changes:
+
+```python
+from color_scheme import ColorScheme
+from color_panel import ColorPanel
+from settings_manager import DEFAULTS
+
+defined = {
+    a for a in vars(ColorScheme)
+    if not a.startswith("_") and isinstance(getattr(ColorScheme, a), str)
+} - {"HEX_PATTERN"}
+
+panel_rows = set(ColorPanel()._pickers.keys())
+persisted = set(DEFAULTS["colors"].keys())
+
+assert defined == panel_rows == persisted, (
+    f"orphan colors: {defined - panel_rows - persisted}; "
+    f"unmanaged colors: {(panel_rows | persisted) - defined}"
+)
+```
+
+---
+
 ## Architecture
 
 ```
@@ -64,12 +110,14 @@ class ColorScheme:
     DARK  = "#1a1b26"
     LINE  = "#3b3d56"
 
-    # Additional fixed/chart colors (also user-settable)
-    SPECTRUM = "#0db9d7"
-    TREND    = "#bb9af7"
+    # Chart curve colors — one per curve the user can see
+    SPECTRUM   = "#0db9d7"
+    TREND      = "#bb9af7"
     RESISTANCE = "#f7768e"
-    GREEN  = "#9ece6a"
-    RED    = "#f7768e"
+
+    # Internal helpers (not exposed to the user)
+    GRID = "#2c2d3f"
+    AXIS = "#565f89"
 
     @classmethod
     def set_color(cls, role: str, hex_color: str) -> bool:
@@ -395,10 +443,18 @@ This is the same pattern used for locating `favicon.ico` at runtime
 
 ## Adding More Customizable Colors
 
+> Follow the [Design Philosophy](#design-philosophy) rule: every color must be wired through all four layers.
+
 1. Add to `ColorScheme`: `NEW_COLOR = "#xxxxxx"`
 2. Add row to `ColorPanel._init_ui()`: `("NEW_COLOR", "Label")`
-3. Use in QSS: `{ColorScheme.NEW_COLOR}` in `get_stylesheet()`
-4. Use in charts: `pg.mkPen(ColorScheme.NEW_COLOR, width=2)`
+3. Add to `settings_manager.py` `DEFAULTS["colors"]`: `"NEW_COLOR": "#xxxxxx"`
+4. Add to `main_window.py` `_save()`: include `"NEW_COLOR"` in the persisted role list
+5. Use in QSS: `{ColorScheme.NEW_COLOR}` in `get_stylesheet()`
+6. Use in charts: `pg.mkPen(ColorScheme.NEW_COLOR, width=2)`
+
+Then run the [Conformance Check](#conformance-check) above to verify integrity.
+
+> **Removing a color is also a first-class operation.** When a chart or surface is deleted, its color must be removed from all four layers in the same commit — leaving the definition behind violates the rule (orphan color the user can't manage) just as surely as adding an unmanaged one.
 
 ## Performance Checklist
 

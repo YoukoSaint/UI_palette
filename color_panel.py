@@ -126,8 +126,7 @@ class ColorPanel(QWidget):
     def _reset(self):
         defaults = {
             "TEXT":"#c0caf5","LIGHT":"#1e1f2e","DARK":"#1a1b26","LINE":"#3b3d56",
-            "SPECTRUM":"#0db9d7","TREND":"#bb9af7","VOLTAGE":"#7aa2f7",
-            "CURRENT":"#9ece6a","RESISTANCE":"#f7768e",
+            "SPECTRUM":"#0db9d7","TREND":"#bb9af7","RESISTANCE":"#f7768e",
         }
         for r, c in defaults.items():
             ColorScheme.set_color(r, c)
