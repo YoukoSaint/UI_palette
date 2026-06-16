@@ -44,6 +44,11 @@ DEFAULTS = {
         "nplc": 1.0,
         "sample_rate": 5.0,
     },
+    "chart_labels": {
+        "spectrum": {"x": 8, "y": 8, "w": 80, "h": 24},
+        "trend": {"x": 8, "y": 8, "w": 110, "h": 24},
+        "sourcemeter": {"x": 8, "y": 8, "w": 100, "h": 24},
+    },
 }
 
 
@@ -60,6 +65,8 @@ def load_settings() -> dict:
             merged["colors"] = {**DEFAULTS["colors"], **data["colors"]}
         if "params" in data:
             merged["params"] = {**DEFAULTS["params"], **data["params"]}
+        if "chart_labels" in data:
+            merged["chart_labels"] = {**DEFAULTS["chart_labels"], **data["chart_labels"]}
         return merged
     except (json.JSONDecodeError, IOError):
         return DEFAULTS

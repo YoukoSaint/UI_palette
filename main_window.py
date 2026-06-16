@@ -70,6 +70,19 @@ class MainWindow(QMainWindow):
         self._mn.valueChanged.connect(self._save)
         self._sr.valueChanged.connect(self._save)
 
+    def _save_chart_labels(self, x: int, y: int, w: int, h: int):
+        sender = self.sender()
+        if sender is self._charts.spectrum._label:
+            key = "spectrum"
+        elif sender is self._charts.trend._label:
+            key = "trend"
+        elif sender is self._charts.sourcemeter._label:
+            key = "sourcemeter"
+        else:
+            return
+        self._settings.setdefault("chart_labels", {})[key] = {"x": x, "y": y, "w": w, "h": h}
+        self._save()
+
     def _setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
@@ -92,6 +105,12 @@ class MainWindow(QMainWindow):
 
         self._charts = ChartPanel()
         rl.addWidget(self._charts, stretch=1)
+        self._charts.apply_label_positions(self._settings.get("chart_labels", {}))
+
+        # 标签拖动时自动保存位置
+        self._charts.spectrum._label.pos_changed.connect(self._save_chart_labels)
+        self._charts.trend._label.pos_changed.connect(self._save_chart_labels)
+        self._charts.sourcemeter._label.pos_changed.connect(self._save_chart_labels)
 
         log = QPlainTextEdit()
         log.setReadOnly(True)

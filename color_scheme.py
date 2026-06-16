@@ -26,6 +26,11 @@ class ColorScheme:
     TREND = "#bb9af7"      # 波段趋势
     RESISTANCE = "#f7768e" # 电阻
 
+    # 图表内标签字号（可调）
+    LABEL_SIZE = 14        # 图表内部标签字体大小
+    LABEL_ALPHA = "ff"     # 标签背景透明度（00=完全透明, ff=完全不透明）
+    AXIS_LABEL_SIZE = 13   # 图表坐标轴标签字号
+
     # 固定辅助色 (不暴露给用户)
     GRID = "#2c2d3f"
     AXIS = "#565f89"
