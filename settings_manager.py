@@ -31,9 +31,12 @@ DEFAULTS = {
         "LIGHT": "#1e1f2e",
         "DARK": "#1a1b26",
         "LINE": "#3b3d56",
+        "BTN": "#3b3d56",
         "SPECTRUM": "#0db9d7",
         "TREND": "#bb9af7",
         "RESISTANCE": "#f7768e",
+        "GRID": "#2c2d3f",
+        "AXIS": "#565f89",
     },
     "params": {
         "integration_ms": 10.0,

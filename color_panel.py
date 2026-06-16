@@ -95,7 +95,7 @@ class ColorPanel(QWidget):
         base.setStyleSheet("font-weight:bold; font-size:10px;")
         layout.addWidget(base)
 
-        for r, l in [("TEXT","Text"), ("LIGHT","Light"), ("DARK","Dark"), ("LINE","Line")]:
+        for r, l in [("TEXT","Text"), ("LIGHT","Light"), ("DARK","Dark"), ("LINE","Line"), ("BTN","Button")]:
             row = ColorPickerRow(r, l, getattr(ColorScheme, r))
             row.color_changed.connect(lambda c, r=r: self._on_change(r, c))
             self._pickers[r] = row
@@ -113,6 +113,18 @@ class ColorPanel(QWidget):
             self._pickers[r] = row
             layout.addWidget(row)
 
+        # Chart display colors
+        layout.addSpacing(4)
+        display_lbl = QLabel("Chart Display")
+        display_lbl.setStyleSheet("font-weight:bold; font-size:10px;")
+        layout.addWidget(display_lbl)
+
+        for r, l in [("GRID","Grid"), ("AXIS","Axis")]:
+            row = ColorPickerRow(r, l, getattr(ColorScheme, r))
+            row.color_changed.connect(lambda c, r=r: self._on_change(r, c))
+            self._pickers[r] = row
+            layout.addWidget(row)
+
         layout.addStretch()
         reset = QPushButton("↺ Reset")
         reset.setStyleSheet("padding:2px; font-size:10px;")
@@ -125,8 +137,9 @@ class ColorPanel(QWidget):
 
     def _reset(self):
         defaults = {
-            "TEXT":"#c0caf5","LIGHT":"#1e1f2e","DARK":"#1a1b26","LINE":"#3b3d56",
+            "TEXT":"#c0caf5","LIGHT":"#1e1f2e","DARK":"#1a1b26","LINE":"#3b3d56","BTN":"#3b3d56",
             "SPECTRUM":"#0db9d7","TREND":"#bb9af7","RESISTANCE":"#f7768e",
+            "GRID":"#2c2d3f","AXIS":"#565f89",
         }
         for r, c in defaults.items():
             ColorScheme.set_color(r, c)

@@ -8,8 +8,8 @@ import re
 
 HEX_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
-ROLES_BASE = ["TEXT", "LIGHT", "DARK", "LINE"]
-ROLES_CHART = ["SPECTRUM", "TREND", "RESISTANCE"]
+ROLES_BASE = ["TEXT", "LIGHT", "DARK", "LINE", "BTN"]
+ROLES_CHART = ["SPECTRUM", "TREND", "RESISTANCE", "GRID", "AXIS"]
 
 
 class ColorScheme:
@@ -20,6 +20,7 @@ class ColorScheme:
     LIGHT = "#1e1f2e"    # 浅色区 (面板/卡片)
     DARK = "#1a1b26"     # 深色区 (主背景)
     LINE = "#3b3d56"     # 线条/边框
+    BTN = "#3b3d56"      # 按钮背景/边框（默认同 LINE）
 
     # 图表曲线色 — 每条曲线一个用户可管理色
     SPECTRUM = "#0db9d7"   # 光谱曲线
@@ -31,9 +32,9 @@ class ColorScheme:
     LABEL_ALPHA = "ff"     # 标签背景透明度（00=完全透明, ff=完全不透明）
     AXIS_LABEL_SIZE = 13   # 图表坐标轴标签字号
 
-    # 固定辅助色 (不暴露给用户)
-    GRID = "#2c2d3f"
-    AXIS = "#565f89"
+    # 图表显示色 — 网格、轴（用户可管理）
+    GRID = "#2c2d3f"       # 图表网格线
+    AXIS = "#565f89"       # 坐标轴 + 刻度文字
 
     @classmethod
     def set_color(cls, role: str, hex_color: str) -> bool:
@@ -69,12 +70,14 @@ def get_stylesheet() -> str:
     light = ColorScheme.LIGHT
     dark = ColorScheme.DARK
     line = ColorScheme.LINE
+    btn = ColorScheme.BTN
 
     text2 = _adjust(text, -30)
     text3 = _adjust(text, -50)
     dark2 = _adjust(dark, -6)
     light2 = _adjust(light, 10)
     accent = _adjust(light, 30)
+    btn_hover = _adjust(btn, 10)
 
     return f"""
 QWidget {{
@@ -107,15 +110,15 @@ QGroupBox::title {{
 }}
 
 QPushButton {{
-    background-color: {line};
+    background-color: {btn};
     color: {text};
-    border: 1px solid {line};
+    border: 1px solid {btn};
     border-radius: 6px;
     padding: 7px 16px;
     font-weight: bold;
     font-size: 13px;
 }}
-QPushButton:hover {{ background-color: {light2}; border-color: {accent}; }}
+QPushButton:hover {{ background-color: {btn_hover}; border-color: {accent}; }}
 QPushButton:pressed {{ background-color: {dark}; }}
 QPushButton:disabled {{ background-color: {light}; color: {text3}; }}
 

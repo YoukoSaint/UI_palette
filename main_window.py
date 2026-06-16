@@ -42,6 +42,15 @@ class MainWindow(QMainWindow):
         QApplication.instance().setStyleSheet(get_stylesheet())
         self._charts.refresh_colors()
 
+        # 恢复面板折叠状态
+        panels = self._settings.get("panels", {})
+        if not panels.get("left", True):
+            self._toggle_left_panel()
+        if not panels.get("right", True):
+            self._toggle_right_panel()
+        if not panels.get("log", True):
+            self._toggle_log_panel()
+
     def _apply_loaded_colors(self):
         for role, color in self._settings["colors"].items():
             ColorScheme.set_color(role, color)
@@ -93,12 +102,16 @@ class MainWindow(QMainWindow):
         content.setSpacing(0)
         main.addLayout(content, stretch=1)
 
-        # 左: 参数面板
-        left = self._build_param_panel()
-        left.setFixedWidth(300)
-        content.addWidget(left)
+        # ── 左: 参数面板 (可折叠) ──
+        self._left_panel = self._build_param_panel()
+        self._left_panel.setFixedWidth(300)
+        content.addWidget(self._left_panel)
 
-        # 中: 图表 + 日志
+        self._left_toggle = self._make_edge_btn("◀", "Hide param panel")
+        self._left_toggle.clicked.connect(self._toggle_left_panel)
+        content.addWidget(self._left_toggle)
+
+        # ── 中: 图表 + 日志 ──
         right = QWidget()
         rl = QVBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
@@ -112,36 +125,47 @@ class MainWindow(QMainWindow):
         self._charts.trend._label.pos_changed.connect(self._save_chart_labels)
         self._charts.sourcemeter._label.pos_changed.connect(self._save_chart_labels)
 
-        log = QPlainTextEdit()
-        log.setReadOnly(True)
-        log.setMaximumBlockCount(500)
-        log.setPlaceholderText("Log output — demo mode")
-        log.setFixedHeight(150)
-        rl.addWidget(log)
-        self._log_panel = log
+        # ── 日志面板 (可折叠) ──
+        log_bar = QHBoxLayout()
+        log_bar.setContentsMargins(0, 0, 0, 0)
+        log_bar.setSpacing(0)
+        self._log_toggle = self._make_edge_btn("▼", "Hide log panel")
+        self._log_toggle.clicked.connect(self._toggle_log_panel)
+        log_bar.addWidget(self._log_toggle, alignment=Qt.AlignLeft)
+        log_bar.addStretch()
+        rl.addLayout(log_bar)
+
+        self._log_panel = QPlainTextEdit()
+        self._log_panel.setReadOnly(True)
+        self._log_panel.setMaximumBlockCount(500)
+        self._log_panel.setPlaceholderText("Log output — demo mode")
+        self._log_panel.setFixedHeight(150)
+        rl.addWidget(self._log_panel)
 
         content.addWidget(right, stretch=1)
 
-        # 折叠按钮
-        self._toggle_btn = QPushButton("▶")
-        self._toggle_btn.setFixedSize(12, 20)
-        self._toggle_btn.setToolTip("Hide color panel")
-        self._toggle_btn.setCursor(Qt.PointingHandCursor)
-        self._toggle_btn.clicked.connect(self._toggle_panel)
-        self._toggle_btn.setStyleSheet("""
+        # ── 右: 配色面板折叠按钮 + 配色面板 ──
+        self._right_toggle = self._make_edge_btn("▶", "Hide color panel")
+        self._right_toggle.clicked.connect(self._toggle_right_panel)
+        content.addWidget(self._right_toggle)
+        content.addWidget(self._color_panel)
+
+        # 恢复上次的折叠状态
+        self._color_panel_visible = True
+        self._left_panel_visible = True
+        self._log_panel_visible = True
+
+    def _make_edge_btn(self, text, tooltip):
+        """生成瘦窄的折叠按钮"""
+        b = QPushButton(text)
+        b.setFixedSize(12, 30)
+        b.setToolTip(tooltip)
+        b.setCursor(Qt.PointingHandCursor)
+        b.setStyleSheet("""
             QPushButton {background:transparent; border:none; font-size:7px; color:#606060; padding:0; margin:0;}
             QPushButton:hover {color:#c0c0c0;}
         """)
-        btn_wrap = QWidget()
-        bl = QVBoxLayout(btn_wrap)
-        bl.setContentsMargins(0, 0, 0, 0)
-        bl.addStretch()
-        bl.addWidget(self._toggle_btn)
-        bl.addStretch()
-        content.addWidget(btn_wrap)
-
-        # 配色面板
-        content.addWidget(self._color_panel)
+        return b
 
     def _build_param_panel(self) -> QWidget:
         w = QWidget()
@@ -187,16 +211,41 @@ class MainWindow(QMainWindow):
         l.addWidget(g)
         return w
 
-    def _toggle_panel(self):
+    def _toggle_left_panel(self):
+        if self._left_panel_visible:
+            self._left_panel.hide()
+            self._left_toggle.setText("▶")
+            self._left_toggle.setToolTip("Show param panel")
+        else:
+            self._left_panel.show()
+            self._left_toggle.setText("◀")
+            self._left_toggle.setToolTip("Hide param panel")
+        self._left_panel_visible = not self._left_panel_visible
+        self._save()
+
+    def _toggle_right_panel(self):
         if self._color_panel_visible:
             self._color_panel.hide()
-            self._toggle_btn.setText("◀")
-            self._toggle_btn.setToolTip("Show color panel")
+            self._right_toggle.setText("◀")
+            self._right_toggle.setToolTip("Show color panel")
         else:
             self._color_panel.show()
-            self._toggle_btn.setText("▶")
-            self._toggle_btn.setToolTip("Hide color panel")
+            self._right_toggle.setText("▶")
+            self._right_toggle.setToolTip("Hide color panel")
         self._color_panel_visible = not self._color_panel_visible
+        self._save()
+
+    def _toggle_log_panel(self):
+        if self._log_panel_visible:
+            self._log_panel.hide()
+            self._log_toggle.setText("▲")
+            self._log_toggle.setToolTip("Show log panel")
+        else:
+            self._log_panel.show()
+            self._log_toggle.setText("▼")
+            self._log_toggle.setToolTip("Hide log panel")
+        self._log_panel_visible = not self._log_panel_visible
+        self._save()
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_F10:
@@ -211,7 +260,7 @@ class MainWindow(QMainWindow):
 
     def _save(self):
         self._settings["colors"] = {r: getattr(ColorScheme, r) for r in [
-            "TEXT", "LIGHT", "DARK", "LINE", "SPECTRUM", "TREND", "RESISTANCE"]}
+            "TEXT", "LIGHT", "DARK", "LINE", "BTN", "SPECTRUM", "TREND", "RESISTANCE", "GRID", "AXIS"]}
         self._settings["params"] = {
             "integration_ms": self._si.value(),
             "averages": self._sa.value(),
@@ -221,6 +270,9 @@ class MainWindow(QMainWindow):
             "nplc": self._mn.value(),
             "sample_rate": self._sr.value(),
         }
+        self._settings.setdefault("panels", {})["left"] = self._left_panel_visible
+        self._settings.setdefault("panels", {})["right"] = self._color_panel_visible
+        self._settings.setdefault("panels", {})["log"] = self._log_panel_visible
         save_settings(self._settings)
 
     def closeEvent(self, event):

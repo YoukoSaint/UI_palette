@@ -18,6 +18,22 @@ def _apply_pg_theme():
     pg.setConfigOptions(useOpenGL=False, leftButtonPan=False)
 
 
+def _apply_grid_axis(chart):
+    """应用网格 + 坐标轴颜色到单个图表"""
+    # 网格线 — 临时切 foreground 重新生成网格，再恢复 TEXT
+    pg.setConfigOption("foreground", ColorScheme.GRID)
+    chart.showGrid(x=True, y=True, alpha=0.4)
+    pg.setConfigOption("foreground", ColorScheme.TEXT)
+    # 轴线和刻度文字
+    pen = pg.mkPen(ColorScheme.AXIS, width=1)
+    for name in ("left", "bottom"):
+        ax = chart.getAxis(name)
+        ax.setPen(pen)
+        ax.setTextPen(pen)
+    # 刻度字号
+    chart._apply_axis_font()
+
+
 class DraggableLabel(QLabel):
     """可拖动+可缩放的标签，位置或大小变化结束后发出 pos_changed(x, y, w, h) 信号"""
     pos_changed = pyqtSignal(int, int, int, int)
@@ -145,6 +161,7 @@ class SpectrumChart(pg.PlotWidget):
         self._apply_fill()
         self._label.set_color(ColorScheme.SPECTRUM)
         self._label._apply_style()
+        _apply_grid_axis(self)
         self._apply_axis_font()
 
     def update_spectrum(self, wl, spec):
@@ -189,6 +206,7 @@ class TrendChart(pg.PlotWidget):
         self._curve.setSymbolBrush(c)
         self._label.set_color(c)
         self._label._apply_style()
+        _apply_grid_axis(self)
         self._apply_axis_font()
 
     def update_data(self, times, values):
@@ -228,6 +246,7 @@ class SourceMeterChart(pg.PlotWidget):
         self._r.setPen(pg.mkPen(ColorScheme.RESISTANCE, width=2.2))
         self._label.set_color(ColorScheme.RESISTANCE)
         self._label._apply_style()
+        _apply_grid_axis(self)
         self._apply_axis_font()
 
     def update_data(self, times, r):
