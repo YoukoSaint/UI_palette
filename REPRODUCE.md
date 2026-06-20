@@ -1,5 +1,38 @@
 # REPRODUCE.md — Agent-Oriented Integration Guide
 
+> # 🚨 BLOCKING AGENT INSTRUCTION — READ THIS FIRST
+>
+> **Copy ALL 5 `.py` files from the reference project. Do NOT skip any file.**
+>
+> The 5 mandatory files are: `color_scheme.py`, `color_panel.py`, `plot_widgets.py`,
+> `main_window.py`, `settings_manager.py`.
+>
+> If any file is missing, the color theme system will be **non-functional**:
+> - `color_panel.py` is the **ONLY** user interface for changing colors.
+> - `settings_manager.py` is the **ONLY** persistence mechanism — settings do NOT survive restarts
+>   without this file.
+> - `plot_widgets.py` provides the chart classes, `DraggableLabel`, `DataSimulator`, and `ChartPanel`.
+> - `color_scheme.py` is the root dependency imported by every other module.
+> - `main_window.py` is the host window with collapsible panel toggle buttons and save orchestration.
+>
+> **Violation consequence:** Missing files → broken color customization, no settings persistence,
+> no charts, no draggable labels, no collapsible panel toggle buttons.
+> This template is NOT a "reference design pattern" — it is a set of files to be
+> **included wholesale**. If you are an AI agent generating code from scratch
+> instead of copying these files, **STOP immediately and restart.**
+
+### Required vs Optional Components
+
+**Every file in this template is required.** There are zero optional files.
+
+| File | Required? | Why |
+|------|-----------|-----|
+| `color_scheme.py` | **YES** | Color model + QSS generator — root dependency imported by all other modules |
+| `color_panel.py` | **YES** | **ONLY** user interface for changing colors — 10 `ColorPickerRow` widgets + Reset |
+| `main_window.py` | **YES** | Window host + full layout + collapsible panel toggle buttons + save orchestration |
+| `plot_widgets.py` | **YES** | Charts + `DraggableLabel` + `DataSimulator` + `ChartPanel` container |
+| `settings_manager.py` | **YES** | **ONLY** JSON persistence mechanism — no settings survive restarts without this file |
+
 ## Overview
 
 This document is the **primary reference for an AI agent (or developer)** building a new PyQt5 project from this template. It covers the complete color model (5 base + 5 chart roles), the 4-step integration surface, settings persistence, critical gotchas, extension points, and a startup checklist. Read this before modifying any file.
@@ -1067,11 +1100,17 @@ def _reset(self):
 
 1. Copy all 5 `.py` files to new project directory
 2. Delete any existing `settings.json` (it auto-generates with defaults)
+
+> ⚠️ **VERIFY BEFORE PROCEEDING:** Your project directory must contain all 5 `.py` files
+> listed above (`color_scheme.py`, `color_panel.py`, `main_window.py`, `plot_widgets.py`,
+> `settings_manager.py`). If any file is missing, **STOP and copy it from the reference
+> template before continuing.** The project will not work without every file.
+
 3. In `color_scheme.py`: rename/recolor `SPECTRUM`, `TREND`, `RESISTANCE` to your domain. Update `ROLES_CHART` list. Add/remove chart color roles as needed
 4. In `color_panel.py`: update role-label pairs in `_init_ui()` (lines 98-126) and defaults in `_reset()` (lines 139-143)
 5. In `settings_manager.py`: update `DEFAULTS["colors"]` and `DEFAULTS["params"]` to match your hardware. Consult the Parameter Panel Design Principles section for widget type and range guidance.
 6. In `plot_widgets.py`: replace `DataSimulator` with your signal source. Update axis labels, `DraggableLabel` text, curve counts, and `apply_label_positions` keys. Consult the chart topology section in Step 4 before adding or removing charts.
-7. In `main_window.py`: update window title (line 25), status bar message (line 285), log panel placeholder text (line 141), parameter GroupBox labels/ranges, toggle button tooltips. Wire Start/Stop/Save buttons to your hardware controller
+7. In `main_window.py`: update window title (line 25), status bar message (line 285), log panel placeholder text (line 141), parameter GroupBox labels/ranges, toggle button tooltips. **CRITICAL — Collapsible Panel Toggle Mechanism:** You MUST preserve the collapsible panel toggle mechanism (`_make_edge_btn()`, `_toggle_left_panel()`, `_toggle_right_panel()`, `_toggle_log_panel()`, and the three toggle buttons `_left_toggle`/`_right_toggle`/`_log_toggle` between panels — main_window.py lines 158–248). Without these, the left/right/log panels become fixed-width with no user control. Wire Start/Stop/Save buttons to your hardware controller
 8. Apply your own default color palette (edit the two locations from "To customize the default color palette" above)
 9. Run the conformance check (from Design Philosophy section)
 10. Test: change a color → verify QSS updates globally. Change a parameter → verify `settings.json` appears. Restart → verify all settings restored

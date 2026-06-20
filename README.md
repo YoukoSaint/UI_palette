@@ -1,128 +1,81 @@
-# UI Palette
+# UI Palette — PyQt5 Dynamic Theme Template
 
-A user-customizable dynamic color theme system for PyQt5 — 10 independently editable color roles, real-time pyqtgraph charts, and persistent settings.
+⚠️ AI AGENTS: Before writing any code, read REPRODUCE.md — this README is only an overview.
 
-## Quick Start
+## Quick Start (for a NEW project)
 
-```bash
-git clone https://github.com/YoukoSaint/UI_palette.git
-cd UI_palette
-pip install pyqt5 pyqtgraph
-python main_window.py
+1. Copy ALL 5 `.py` files into your project directory
+2. `pip install pyqt5 pyqtgraph`
+3. Edit window title, param labels, and curve names to match your domain
+4. `settings.json` auto-generates on first save — it does NOT appear by itself
+
+## Minimal Viable File Set — ALL 5 REQUIRED
+
+| File | Required | Role |
+|------|----------|------|
+| `color_scheme.py` | **YES** | 10 color roles, QSS generator, `hex_to_rgba()`. Zero Qt imports — root dependency. |
+| `color_panel.py` | **YES** | 170px sidebar: 10 `ColorPickerRow` widgets + Reset. Without it, colors exist but users cannot change them. |
+| `plot_widgets.py` | **YES** | 3 pyqtgraph charts, `DraggableLabel` subclass, `DataSimulator`, `ChartPanel`. |
+| `main_window.py` | **YES** | Host window: param panel, collapsible toggles, save orchestration. Entry point. |
+| `settings_manager.py` | **YES** | JSON persistence: load/save with deep-merge. Without it, nothing survives restarts. |
+
+## Architecture (all 5 files + runtime flow)
+
 ```
-Requires Python 3.6+. No database — `settings.json` is auto-generated on first save.
-
-## Architecture
-
+settings_manager.py ── DEFAULTS ──→ load_settings() / save_settings()
+         │ (initial values)                    ▲ (MainWindow._save)
+         ▼                                     │
+  ┌──────────────┐  picker   ┌──────────────┐  signal  ┌───────────────┐
+  │ ColorScheme  │◄──────────│ ColorPanel   │─────────►│ ChartPanel    │
+  │ 10 class attrs│  change  │ 10 picker    │          │ 3 PlotWidgets │
+  │ get_stylesheet│─────────►│ rows + Reset │          │ DraggableLabel│
+  │ hex_to_rgba() │          └──────────────┘          │ DataSimulator │
+  └──────┬───────┘                                     └───────────────┘
+         │ QSS → QApplication.setStyleSheet()                   │
+         ▼                                                      ▼
+  main_window.py ────────────────────────────────────────────────
+  QMainWindow: param(300px) │ charts │ color(170px) │ log(150px)
+  _make_edge_btn()×3 → _toggle_*_panel() → _save()
+  F10 fullscreen, Esc normal
 ```
-ColorScheme (class attrs — single source of truth, zero PyQt imports)
-  ├─ get_stylesheet() ──→ QApplication.setStyleSheet()   ← QSS (every widget)
-  └─ hex_to_rgba()    ──→ pg.mkPen() / pg.mkBrush()      ← chart pens/brushes
 
-Runtime flow (4 steps per color change):
-  ColorPanel picker ──→ ColorScheme.set_color(role, hex)
-    ──→ get_stylesheet() → QApplication.instance().setStyleSheet()  ⚠ not QMainWindow
-    ──→ ChartPanel.refresh_colors() → _apply_pg_theme() + per-chart pen/brush/fill/label
-    ──→ MainWindow._save() → full snapshot to settings.json
-```
+Per-change: picker → set_color() → setStyleSheet() → refresh_colors() → _save()
 
-## Files
+## Color Roles (all 10 require user-facing pickers)
 
-| File | Role |
-|------|------|
-| `color_scheme.py` | Color registry (10 class attrs), QSS generator, `hex_to_rgba()`. Zero Qt imports — root dependency. |
-| `color_panel.py` | 170px right sidebar: 10 `ColorPickerRow` widgets in 3 sections + Reset button. |
-| `plot_widgets.py` | 3 pyqtgraph charts, `DraggableLabel`, `DataSimulator`, `ChartPanel` container + timer. |
-| `main_window.py` | Application entry, full layout, parameter panel, panel toggling, settings orchestration. |
-| `settings_manager.py` | JSON persistence: save/load with deep-merge, frozen-exe path resolution. |
+| Role | Default | Category |
+|------|---------|----------|
+| TEXT | #c0caf5 | Base — foreground text, status bar, labels, inputs |
+| LIGHT | #1e1f2e | Base — GroupBox bg, combobox dropdown |
+| DARK | #1a1b26 | Base — QMainWindow/chart background |
+| LINE | #3b3d56 | Base — borders, splitter, scrollbar |
+| BTN | #3b3d56 | Base — button bg/border (split from LINE for independent control) |
+| SPECTRUM | #0db9d7 | Curve — spectrum line (w=2.2) + semi-transparent fill |
+| TREND | #bb9af7 | Curve — trend line (w=2) + symbol markers |
+| RESISTANCE | #f7768e | Curve — sourcemeter line (w=2.2, connect="finite") |
+| GRID | #2c2d3f | Display — chart grid at alpha 0.4 |
+| AXIS | #565f89 | Display — axis line + tick label pens |
 
-## Color System
+## Patterns to Copy (the 3 gaps agents hit most often)
 
-**5 base colors** (TEXT, LIGHT, DARK, LINE, BTN) drive all QSS via `get_stylesheet()`. **3 chart curve** roles (SPECTRUM, TREND, RESISTANCE) drive plot pens, fills, and DraggableLabel text. **2 chart display** roles (GRID, AXIS) drive grid lines and axis styling — both user-editable in the Color Panel.
+1. **Collapsible toggles** — `_make_edge_btn(text,tooltip)` → 12×30px QPushButton (hardcoded colors). Wire `.clicked` to `_toggle_*_panel()` which calls `_save()`. 3 instances: left/right/bottom.
+2. **DraggableLabel** — QLabel subclass. `DraggableLabel(text, color, parent)`. Call `_label.set_color(hex)` in `refresh_color()`. Pos/size auto-persisted on release.
+3. **Settings** — `from settings_manager import load_settings, save_settings`. `load_settings()` BEFORE building UI. `_save()` after every change.
 
-Six derived colors are computed inline by `_adjust(hex, amount)` which adds a signed integer to each RGB component:
+## Key Design Rules
+- Class attrs for colors → `ColorScheme.TEXT` in f-strings. `get_stylesheet()` re-reads every call.
+- Pen/brush at `__init__`, re-created in `refresh_color()` — hot path zero-allocation.
+- QSS on `QApplication` (not QMainWindow), applied LAST.
+- Colors loaded BEFORE panel construction. Signals AFTER param restore → no redundant save.
+- **Every color has a picker** — no orphan roles (REPRODUCE.md Design Philosophy).
 
-| Derived | Formula | Controls |
-|---------|---------|----------|
-| `text2` | `_adjust(TEXT, -30)` | QLabel, QPlainTextEdit, QStatusBar text |
-| `text3` | `_adjust(TEXT, -50)` | QPushButton:disabled text |
-| `dark2` | `_adjust(DARK, -6)` | QMainWindow, QLineEdit, QSpinBox, QComboBox background |
-| `light2` | `_adjust(LIGHT, +10)` | (defined but not consumed in current QSS — reserved for future use) |
-| `accent` | `_adjust(LIGHT, +30)` | GroupBox title, focus borders, splitter/scrollbar hover |
-| `btn_hover` | `_adjust(BTN, +10)` | QPushButton:hover background |
+## Where to Go Next (REPRODUCE.md)
 
-Three tunable constants on `ColorScheme`: `LABEL_SIZE=14` (chart label font px), `LABEL_ALPHA="ff"` (label background opacity — hex string, parsed at runtime via `int(..., 16)` yielding 0–255), `AXIS_LABEL_SIZE=13` (axis tick font px).
-
-## Color Roles Reference
-
-| Role | Default | Category | Controls |
-|------|---------|----------|----------|
-| `TEXT` | `#c0caf5` | Base | Foreground text, status bar, chart foreground, labels, inputs |
-| `LIGHT` | `#1e1f2e` | Base | GroupBox background, QComboBox dropdown, ScrollBar, disabled buttons |
-| `DARK` | `#1a1b26` | Base | QWidget/QMainWindow background, pyqtgraph chart background |
-| `LINE` | `#3b3d56` | Base | Borders on GroupBox, QLineEdit, SpinBox, ComboBox, Splitter, ScrollBar |
-| `BTN`  | `#3b3d56` | Base | QPushButton background/border (defaults to `LINE`; split for independent control — changing LINE does NOT auto-update BTN) |
-| `SPECTRUM` | `#0db9d7` | Chart Curve | Spectrum line (width 2.2) + fill (alpha 60) + DraggableLabel text |
-| `TREND` | `#bb9af7` | Chart Curve | Trend line (width 2) + symbol brush (size 3) + DraggableLabel text |
-| `RESISTANCE` | `#f7768e` | Chart Curve | SourceMeter line (width 2.2, `connect="finite"`) + DraggableLabel text |
-| `GRID` | `#2c2d3f` | Chart Display | Chart grid lines at alpha 0.4 |
-| `AXIS` | `#565f89` | Chart Display | Axis line pen + tick label pen |
-
-## Features
-
-- **Dynamic Theme:** All widgets restyled from current `ColorScheme` values via a single `get_stylesheet()` string applied to `QApplication`. Covers QMainWindow, QWidget, QLabel, QGroupBox, QPushButton (including `:hover`, `:pressed`, `:disabled` pseudo-states), QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QSplitter, QPlainTextEdit, QStatusBar, QScrollBar (vertical + horizontal, arrow buttons hidden via `height:0; border:none`). Any color change instantly propagates to every widget and all 3 charts.
-- **Color Panel:** 170px right sidebar. 3 labeled sections — "Base Colors" (5 rows), "Chart Curves" (3 rows), "Chart Display" (2 rows). Each row: 10x10 swatch (border `#555`, independent of theme), 28px role label, 64px hex QLineEdit (Enter to apply, red border on invalid), 18px `QColorDialog` picker button. Reset button restores all 10 defaults from `settings_manager.DEFAULTS["colors"]`. **BTN** default is identical to LINE — users should update both together to keep button borders consistent; see REPRODUCE.md for the coupling explanation.
-- **Collapsible Panels:** Left (300px parameters), Right (170px colors), Bottom (150px log). Arrow toggle buttons 12x30px placed between panels. Visibility persisted as `"panels": {"left": bool, "right": bool, "log": bool}` — a runtime-only key added by `setdefault`, not in DEFAULTS. **Note:** Toggle buttons use hardcoded colors (`#606060` / `#c0c0c0`) that bypass the dynamic theme. This is a known limitation — they remain visually stable regardless of the selected theme.
-- **Parameter Settings:** 7 hardware parameters in 3 GroupBoxes — Spectrometer (integration_ms 1–60000, averages 2–100, monitor_wl 0–10000), SourceMeter (source_type combo Voltage/Current, source_value -100–100, nplc 0.01–10), Acquisition (sample_rate 0.01–1000 Hz). **Note:** `sample_rate` is a user-facing parameter for reference/hardware configuration — it does NOT dynamically control the simulator timer interval (fixed at 500ms). Orphan Start/Stop/Save buttons have `objectName` selectors for hardcoded QSS styling (green/red/blue, bypassing the dynamic theme) but no `clicked` connections — natural attachment points for hardware control.
-- **Three Charts:** Vertical `QSplitter` stack. `SpectrumChart` — auto-range, semi-transparent fill (`hex_to_rgba(SPECTRUM, 60)`), throttled every 5th tick (first frame renders immediately; rationale: 1400 data points vs. 2 for scrolling charts — throttled at every 5th tick to avoid saturating the Qt event loop). `TrendChart` — 1000-pt rolling buffer, symbol markers, X linked to SourceMeter via `setXLink`, bottom axis hidden. `SourceMeterChart` — 1000-pt buffer, `connect="finite"`, drives shared X with 60s rolling window. Y-axis widths unified on first show via deferred `QTimer.singleShot(0, ...)`. **Note:** The QSplitter holding the three charts is a local variable (not stored as `self._splitter`), so splitter handle positions are NOT persisted across restarts — users must re-drag handles each session.
-- **Draggable Labels:** Per-chart `DraggableLabel` (QLabel subclass). Drag anywhere to move; bottom-right 20x20 corner to resize (min 40x20). Auto font scaling `max(8, height * 0.72)` on every resize. Background composed from `ColorScheme.LIGHT` RGB + `LABEL_ALPHA` opacity, border from `ColorScheme.LINE`, text from curve color. Position/size persisted to `chart_labels` key on mouse release.
-- **Data Simulator:** `DataSimulator` static methods — 3 Gaussian peaks (450nm sigma=30 amp=800, 550nm sigma=25 amp=500, 680nm sigma=20 amp=300) with noise `gauss(0,15)`, damped sine `500+200*sin(t*0.5)*exp(-t*0.01)` with noise `gauss(0,10)`, V/I resistance `V=5+0.1*sin(2t)`, `I=0.003+0.0002*cos(3t)` with NaN when I=0. `QTimer` at 500ms, 2 pts/tick. **Replace with real hardware signals** (see REPRODUCE.md).
-- **Settings Persistence:** `settings.json` alongside source (or next to `.exe` when frozen via `sys.executable`, not `sys._MEIPASS` — see REPRODUCE.md critical gotcha #7). Full snapshot on every change: 10 colors, 7 params, 3 panel booleans, 3 label positions. Deep-merge on load — per-sub-dict shallow merge so missing keys get defaults and unknown keys survive. **Warning:** On a missing/missing file, `load_settings()` returns the module-level `DEFAULTS` dict **by reference** (not a copy). Any subsequent mutation of the returned dict corrupts the global constant — see REPRODUCE.md for the full explanation and mitigation.
-- **Keyboard:** `F10` fullscreen, `Escape` return to normal.
-
-## Key Design Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| Class attributes for colors (not dict) | `ColorScheme.TEXT` syntax usable directly in f-strings throughout QSS |
-| `get_stylesheet()` as function (not file) | Re-reads `ColorScheme` attrs on every call — always reflects current state |
-| Pen/brush at `__init__`, re-created in `refresh_color()` | Theme changes are rare; `update_data()` is the hot path — no allocation there |
-| `QHBoxLayout` with toggle buttons between panels | Toggle lives at the seam between panel and content, not inside either |
-| `sys.executable` for frozen-exe settings path | `sys._MEIPASS` is a temp read-only directory deleted on exit |
-| Signal connections AFTER param restore | Prevents `_apply_loaded_params()` from triggering a redundant `_save()` |
-| QSS applied LAST (after all widgets + params + signals) | Widget construction can set inline styles that would override the theme |
-| PyQt5 `pyqtSignal(dict)` for per-chart data | Signal-driven architecture replaces timer polling for real hardware — see REPRODUCE.md |
-
-## Window & UI Defaults
-
-| Setting | Value | Location |
-|---------|-------|----------|
-| Window title | "OptoSync — Synchronized Acquisition System" | `main_window.py` line 25 |
-| Default size | 1440×920 | `main_window.py` line 26 |
-| Minimum size | 1100×700 | `main_window.py` line 27 |
-| Log panel buffer | 500 lines max (`setMaximumBlockCount`) | `main_window.py` line 140 |
-| Log placeholder text | "Log output — demo mode" | `main_window.py` line 141 |
-| Status bar message | "Ready — Demo Mode \| Simulated data" | `main_window.py` line 285 |
-
-## Troubleshooting
-
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| `ModuleNotFoundError: No module named 'PyQt5'` | Missing dependency | `pip install pyqt5 pyqtgraph` |
-| Blank charts on startup | pyqtgraph theme not applied, or chart background mismatch | Verify `_apply_pg_theme()` is called before `refresh_colors()` |
-| Settings lost on restart | Frozen exe writing to `sys._MEIPASS` (temp/read-only) | Verify `_get_settings_dir()` uses `sys.executable` |
-| Settings lost on restart | Directory write permissions | Check writability of directory containing `settings.json` |
-| Custom settings not applied (app uses defaults or crashes on startup) | Manually edited `settings.json` with JSON syntax errors (e.g., trailing comma) or incorrect value types | The app safely falls back to defaults when JSON is unparseable — your data is not lost, only not applied. FIRST validate and fix the JSON (use `python -m json.tool settings.json`). If irrecoverable, RENAME to `settings.json.bak` (do NOT delete — colors, params, and label positions are preserved). Defaults regenerate on next launch. Manually copy values from the `.bak` file back into the fresh settings.json. |
-| `QWidget: Must construct a QApplication...` | QWidget instantiated before `QApplication()` | Ensure `QApplication(sys.argv)` runs first in `__main__` |
-| Wrong initial colors in picker | `_apply_loaded_colors()` called after `ColorPanel` construction | Colors must be restored before `_setup_ui()` creates the panel |
-| Splitter handle positions lost on restart | QSplitter is a local variable, not stored as instance attribute (plot_widgets.py line 299) | Known limitation — re-drag handles after restart. See REPRODUCE.md for the structural reason. |
-
-## License
-
-MIT
-
----
-
-For step-by-step integration into a new PyQt5 project, see **REPRODUCE.md**.
-For the complete settings JSON schema and save/load merge logic, see **REPRODUCE.md**.
-For the extension point checklist (adding colors, replacing the simulator, wiring hardware), see **REPRODUCE.md**.
+| Section | Location |
+|---------|----------|
+| Integration checklist (11 steps) | Lines 1066–1078 |
+| Full step-by-step with code blocks | Steps 1–7 |
+| Settings JSON schema + merge logic | Lines 757–841 |
+| Parameter panel design principles | Lines 900–977 |
+| Extension points (add colors, replace simulator, wire hardware) | Lines 990–1064 |
+| Performance checklist | Lines 1082–1093 |
