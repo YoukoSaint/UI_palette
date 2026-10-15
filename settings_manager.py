@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """Settings persistence — save/load all user preferences to JSON"""
+import copy
 import json
 import os
 import sys
+import tempfile
+from typing import Any, Dict
 
 
 def _get_settings_dir() -> str:
@@ -20,12 +23,12 @@ def _get_settings_dir() -> str:
         # Compiled — write settings next to the .exe
         return os.path.dirname(sys.executable)
     # Development — write settings in the project directory
-    return os.path.dirname(__file__)
+    return os.path.dirname(os.path.abspath(__file__))
 
 
 SETTINGS_FILE = os.path.join(_get_settings_dir(), "settings.json")
 
-DEFAULTS = {
+DEFAULTS: Dict[str, Any] = {
     "colors": {
         "TEXT": "#c0caf5",
         "LIGHT": "#1e1f2e",
@@ -47,35 +50,66 @@ DEFAULTS = {
         "nplc": 1.0,
         "sample_rate": 5.0,
     },
+    # Desktop (PyQt) label geometry — pixels
     "chart_labels": {
         "spectrum": {"x": 8, "y": 8, "w": 80, "h": 24},
         "trend": {"x": 8, "y": 8, "w": 110, "h": 24},
         "sourcemeter": {"x": 8, "y": 8, "w": 100, "h": 24},
     },
+    # Web (Plotly) annotation positions — paper coordinates (0-1).
+    # Kept separate from "chart_labels" so the two front-ends sharing this
+    # file never misread each other's units.
+    "chart_labels_web": {
+        "spectrum": {"x": 0.02, "y": 0.97},
+        "trend": {"x": 0.02, "y": 0.64},
+        "sourcemeter": {"x": 0.02, "y": 0.31},
+    },
+    "panels": {"left": True, "right": True, "log": True},
 }
 
 
 def load_settings() -> dict:
-    """Load settings from JSON, falling back to defaults"""
+    """Load settings from JSON, falling back to defaults.
+
+    Always returns a fresh deep copy, so callers may mutate the result
+    without corrupting ``DEFAULTS``.  Sections with a dict default are
+    merged key-by-key; malformed sections in the file are ignored.
+    """
+    merged = copy.deepcopy(DEFAULTS)
     if not os.path.exists(SETTINGS_FILE):
-        return DEFAULTS
+        return merged
     try:
         with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-        merged = DEFAULTS.copy()
-        merged.update(data)
-        if "colors" in data:
-            merged["colors"] = {**DEFAULTS["colors"], **data["colors"]}
-        if "params" in data:
-            merged["params"] = {**DEFAULTS["params"], **data["params"]}
-        if "chart_labels" in data:
-            merged["chart_labels"] = {**DEFAULTS["chart_labels"], **data["chart_labels"]}
+    except (ValueError, OSError):  # JSONDecodeError / UnicodeDecodeError / IO
         return merged
-    except (json.JSONDecodeError, IOError):
-        return DEFAULTS
+    if not isinstance(data, dict):
+        return merged
+
+    for key, value in data.items():
+        default = merged.get(key)
+        if isinstance(default, dict):
+            if isinstance(value, dict):
+                default.update(value)
+        else:
+            merged[key] = value
+    return merged
 
 
 def save_settings(settings: dict) -> None:
-    """Save settings to JSON"""
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=2, ensure_ascii=False)
+    """Save settings to JSON atomically (temp file + rename).
+
+    A crash mid-write can no longer leave a truncated settings.json behind.
+    """
+    directory = os.path.dirname(SETTINGS_FILE)
+    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix="settings.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2, ensure_ascii=False)
+        os.replace(tmp_path, SETTINGS_FILE)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise

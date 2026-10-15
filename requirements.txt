@@ -1,2 +1,2 @@
-pyqt5
-pyqtgraph
+pyqt5>=5.15
+pyqtgraph>=0.13

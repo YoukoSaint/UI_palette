@@ -789,7 +789,7 @@ The `QSplitter` holding the three charts at line 299 is a local variable (`split
 
 ## Settings Persistence — Complete Schema
 
-### `DEFAULTS` dict (`settings_manager.py` lines 28-55)
+### `DEFAULTS` dict (`settings_manager.py` lines 30-67)
 
 ```json
 {
@@ -818,40 +818,43 @@ The `QSplitter` holding the three charts at line 299 is a local variable (`split
     "spectrum":    {"x": 8, "y": 8, "w":  80, "h": 24},
     "trend":       {"x": 8, "y": 8, "w": 110, "h": 24},
     "sourcemeter": {"x": 8, "y": 8, "w": 100, "h": 24}
+  },
+  "chart_labels_web": {
+    "spectrum":    {"x": 0.02, "y": 0.97},
+    "trend":       {"x": 0.02, "y": 0.64},
+    "sourcemeter": {"x": 0.02, "y": 0.31}
+  },
+  "panels": {
+    "left":  true,
+    "right": true,
+    "log":   true
   }
 }
 ```
 
-### Runtime-only key (not in DEFAULTS, added by `setdefault`)
+`chart_labels` is the desktop key (pixels). `chart_labels_web` (paper coordinates 0–1) belongs
+to the sibling `UI_palette_web` project; the desktop app never reads or writes it, it only
+preserves it. Keeping the two keys apart stops the two front-ends misreading each other's units.
 
-```json
-"panels": {
-  "left":  true,
-  "right": true,
-  "log":   true
-}
-```
+### Merge logic (`load_settings()`)
 
-### Merge logic (`load_settings()` — lines 58-75)
+1. Start from `copy.deepcopy(DEFAULTS)` — the caller always owns a fresh dict, so mutating it can never corrupt the module-level constant.
+2. If `settings.json` does not exist, is unreadable, is not valid JSON, or its top level is not an object → return that copy.
+3. For every top-level key in the file: if `DEFAULTS` has a dict for it (`colors`, `params`, `chart_labels`, `chart_labels_web`, `panels`) and the file value is also a dict, merge key-by-key; a malformed (non-dict) section is ignored. Unknown top-level keys are kept as-is.
 
-1. If `settings.json` does not exist → return `DEFAULTS` verbatim (**warning: returns the module-level constant by reference, not a copy — see "Known issue" below**)
-2. Parse JSON from disk
-3. Shallow-copy `DEFAULTS` into `merged`
-4. Top-level `merged.update(data)` (preserves unknown keys)
-5. Per-sub-dict shallow merge: `merged["colors"] = {**DEFAULTS["colors"], **data["colors"]}` (same for `params`, `chart_labels`)
-6. On `JSONDecodeError` or `IOError` → return `DEFAULTS` (**silently — no logging, no warning, no user notification**)
+`save_settings()` writes to a temp file in the same directory and then `os.replace()`s it, so a crash mid-write cannot leave a truncated `settings.json`.
 
-This is an additive/forgiving merge: new keys added to DEFAULTS in a future version appear automatically; keys removed from DEFAULTS but present in the JSON file persist in memory (a potential memory leak of stale configuration — typos like `"LIGHTT"` accumulate permanently with no purge mechanism).
+This is an additive/forgiving merge: new keys added to DEFAULTS in a future version appear automatically. Keys removed from DEFAULTS but present in the file are preserved (typos like `"LIGHTT"` persist; there is no purge).
+
+**Validation of colors:** `ColorScheme.set_color()` accepts only the 10 roles in `ROLES_BASE + ROLES_CHART` and a `#RRGGBB` value. Because `settings.json` is untrusted input, it can no longer overwrite other class attributes such as `LABEL_SIZE` or `set_color` itself.
 
 **Known issues:**
 
-1. **Return-by-reference on file-not-found:** `load_settings()` returns the module-level `DEFAULTS` dict directly (not a copy) when `settings.json` is missing. If the caller mutates the returned dict (e.g., `_save()` does `self._settings["colors"] = {...}`), the global `DEFAULTS` constant is permanently corrupted. Subsequent `load_settings()` calls return the user's last-saved colors instead of factory defaults. **This is the root cause of the `_reset()` button restoring user colors instead of factory defaults on first run.** Fix: return `DEFAULTS.copy()` instead of `DEFAULTS`.
+1. **Silent JSON error suppression:** On `JSONDecodeError` or `IOError`, the function returns `DEFAULTS` with zero logging or user notification. A manually edited `settings.json` with a trailing comma is silently discarded. Worse, the auto-save chain (`_save()` → `save_settings()`) immediately **overwrites** the corrupt file with default-based state, permanently destroying all salvageable data. **Diagnostic:** if the app starts with factory defaults after editing settings.json, check for JSON syntax errors with `python -m json.tool settings.json`.
 
-2. **Silent JSON error suppression:** On `JSONDecodeError` or `IOError`, the function returns `DEFAULTS` with zero logging or user notification. A manually edited `settings.json` with a trailing comma is silently discarded. Worse, the auto-save chain (`_save()` → `save_settings()`) immediately **overwrites** the corrupt file with default-based state, permanently destroying all salvageable data. **Diagnostic:** if the app starts with factory defaults after editing settings.json, check for JSON syntax errors with `python -m json.tool settings.json`.
+2. **Keys removed from DEFAULTS persist forever:** Due to the additive merge logic (step 3 merges key-by-key), any key present in the user's `settings.json` that was subsequently removed from `DEFAULTS` (e.g., a renamed or deleted color role) is preserved in memory and written back to disk on every save. There is no cleanup mechanism. Review `settings.json` periodically for stale entries.
 
-3. **Keys removed from DEFAULTS persist forever:** Due to the additive merge logic (step 5 uses `{**DEFAULTS, **data}`), any key present in the user's `settings.json` that was subsequently removed from `DEFAULTS` (e.g., a renamed or deleted color role) is preserved in memory and written back to disk on every save. There is no cleanup mechanism. Review `settings.json` periodically for stale entries.
-
-### File path resolution (`_get_settings_dir()` — lines 8-23)
+### File path resolution (`_get_settings_dir()` — lines 10-25)
 
 - **Development** (`sys.frozen` is False): `os.path.dirname(__file__)` → project directory
 - **Frozen/PyInstaller** (`sys.frozen` is True): `os.path.dirname(sys.executable)` → directory containing the `.exe`
@@ -943,7 +946,7 @@ There are no runtime assertions or guards enforcing this order — violations pr
 ### 7. Frozen exe path: `sys.executable`, not `sys._MEIPASS`
 
 ```python
-# settings_manager.py lines 8-23
+# settings_manager.py lines 10-25
 def _get_settings_dir() -> str:
     if getattr(sys, "frozen", False):
         return os.path.dirname(sys.executable)  # persistent, writable
@@ -958,7 +961,7 @@ def _get_settings_dir() -> str:
 
 ### 9. `sample_rate` parameter is not wired to the timer
 
-The `sample_rate` param in `DEFAULTS["params"]` (settings_manager.py line 48) is stored and restored across sessions but never used at runtime to change the `QTimer` interval (fixed at 500ms in ChartPanel line 322). It exists as a user-facing reference parameter for hardware configuration, not a runtime control. If you want dynamic rate control, wire it to `ChartPanel._timer.setInterval(sample_rate * 1000)`.
+The `sample_rate` param in `DEFAULTS["params"]` (settings_manager.py line 50) is stored and restored across sessions but never used at runtime to change the `QTimer` interval (fixed at 500ms in ChartPanel line 322). It exists as a user-facing reference parameter for hardware configuration, not a runtime control. If you want dynamic rate control, wire it to `ChartPanel._timer.setInterval(sample_rate * 1000)`.
 
 ### 10. `refresh_colors()` sets per-chart backgrounds redundantly
 
@@ -973,7 +976,7 @@ At `plot_widgets.py` lines 400-402, `refresh_colors()` explicitly calls `ch.setB
 1. Add class attr to `ColorScheme` (e.g., `NEW_COLOR = "#xxxxxx"`)
 2. Add to `ROLES_BASE` or `ROLES_CHART` list (color_scheme.py lines 11-12)
 3. Add `ColorPickerRow` to the appropriate section in `ColorPanel._init_ui()` (color_panel.py lines 98-126) with a label
-4. Add to `settings_manager.DEFAULTS["colors"]` (line 29-40)
+4. Add to `settings_manager.DEFAULTS["colors"]` (lines 31-42)
 5. Add to `ColorPanel._reset()` defaults (lines 139-143)
 6. Consume in `get_stylesheet()` OR `refresh_color()`/`_apply_pg_theme()`/`_apply_grid_axis()`
 7. **CRITICAL:** Add the new role name to the hardcoded list in `MainWindow._save()` (main_window.py line 262-263) — this list is NOT derived from `ROLES_BASE + ROLES_CHART` at runtime. Missing this step causes silent data loss (new role colors not persisted across restarts).
@@ -999,7 +1002,7 @@ At `plot_widgets.py` lines 400-402, `refresh_colors()` explicitly calls `ch.setB
 6. Extend `MainWindow._save_chart_labels` with new sender check
 
 > **When adding/removing charts:** The chart-label keys ("spectrum", "trend", "sourcemeter") are hardcoded in **4 separate locations** across 3 files:
-> - `settings_manager.py` DEFAULTS `chart_labels` (lines 50-54)
+> - `settings_manager.py` DEFAULTS `chart_labels` (lines 53-57)
 > - `plot_widgets.py` `ChartPanel.apply_label_positions()` (lines 344-361)
 > - `main_window.py` `_save_chart_labels()` (lines 84-89)
 > - `main_window.py` signal connections (lines 124-126)
@@ -1022,7 +1025,7 @@ At `plot_widgets.py` lines 400-402, `refresh_colors()` explicitly calls `ch.setB
 
 Procedure:
 1. Add/remove widgets in `_build_param_panel()` (main_window.py lines 170-212)
-2. Update `DEFAULTS["params"]` with new keys (settings_manager.py lines 41-49)
+2. Update `DEFAULTS["params"]` with new keys (settings_manager.py lines 43-51)
 3. Update `_apply_loaded_params()` to read/write new keys (main_window.py lines 58-66)
 4. Update `_connect_param_signals()` to wire new widgets to `_save` (lines 68-80)
 5. Update `_save()` to serialize new widget values (lines 264-272)
@@ -1079,7 +1082,7 @@ The five update points (build_panel, DEFAULTS, apply_loaded_params, connect_sign
 Edit only **TWO places** (not three — the Reset button should read from `DEFAULTS["colors"]` at runtime):
 
 1. `ColorScheme` class attributes (color_scheme.py lines 19-37)
-2. `settings_manager.DEFAULTS["colors"]` (lines 29-40)
+2. `settings_manager.DEFAULTS["colors"]` (lines 31-42)
 
 **For the Reset button:** Refactor `ColorPanel._reset()` to read from `settings_manager.DEFAULTS["colors"]` at runtime instead of maintaining a third independent copy of the defaults. Currently, `_reset()` hardcodes a third copy at color_panel.py lines 139-143. If DEFAULTS and ColorScheme attrs are updated but this third copy is forgotten, the Reset button silently restores stale wrong colors. The simplest fix:
 
@@ -1092,7 +1095,7 @@ def _reset(self):
         self.color_changed.emit(r, c)
 ```
 
-**Note:** This requires fixing `load_settings()` to return `DEFAULTS.copy()` instead of `DEFAULTS` by reference (see Settings Persistence — Known Issues #1). Otherwise, `DEFAULTS["colors"]` gets silently overwritten with user colors on first save, and the Reset button restores user colors instead of factory defaults.
+**Note:** `load_settings()` now returns a deep copy of `DEFAULTS`, so `DEFAULTS["colors"]` is no longer overwritten by user colors and the Reset button can safely read from it.
 
 ---
 

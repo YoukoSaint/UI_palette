@@ -787,34 +787,27 @@ Spectrum 图表被节流到每 5 个 tick（`self._data_counter <= 1 or self._da
 }
 ```
 
-### 仅运行时键（不在 DEFAULTS 中，由 `setdefault` 添加）
+### 其他顶层键
 
-```json
-"panels": {
-  "left":  true,
-  "right": true,
-  "log":   true
-}
-```
+`DEFAULTS` 还包含 `chart_labels_web`（Web 版标注位置，paper 坐标 0–1，桌面版不读写，仅原样保留）和 `panels`（`{"left": true, "right": true, "log": true}`）。`chart_labels`（像素）与 `chart_labels_web`（paper 坐标）分开存放，避免两个前端互相误读单位。
 
-### 合并逻辑（`load_settings()` — 第 58-75 行）
+### 合并逻辑（`load_settings()`）
 
-1. 如果 `settings.json` 不存在 → 原样返回 `DEFAULTS`（**警告：返回的是模块级常量引用，而非副本 —— 见下方"已知问题"**）
-2. 从磁盘解析 JSON
-3. 将 `DEFAULTS` 浅拷贝到 `merged`
-4. 顶层 `merged.update(data)`（保留未知键）
-5. 逐子字典浅合并：`merged["colors"] = {**DEFAULTS["colors"], **data["colors"]}`（`params`、`chart_labels` 同理）
-6. 遇到 `JSONDecodeError` 或 `IOError` → 返回 `DEFAULTS`（**静默 —— 无日志、无警告、无用户通知**）
+1. 从 `copy.deepcopy(DEFAULTS)` 开始 —— 调用方拿到的永远是新字典，修改它不会破坏模块级常量。
+2. 如果 `settings.json` 不存在、无法读取、不是合法 JSON，或顶层不是对象 → 返回该副本。
+3. 对文件中的每个顶层键：若 `DEFAULTS` 中对应的是字典（`colors`、`params`、`chart_labels`、`chart_labels_web`、`panels`）且文件中的值也是字典，则逐键合并；格式不对（非字典）的段落被忽略。未知顶层键原样保留。
 
-这是一个增量/宽容的合并：未来版本中添加到 DEFAULTS 的新键自动出现；从 DEFAULTS 移除但在 JSON 文件中存在的键在内存中保留（潜在的陈旧配置内存泄漏 —— 如 `"LIGHTT"` 这样的拼写错误会永久累积且无清理机制）。
+`save_settings()` 先写入同目录的临时文件，再用 `os.replace()` 替换，因此写入中途崩溃不会留下被截断的 `settings.json`。
+
+这是一个增量/宽容的合并：未来版本中添加到 DEFAULTS 的新键自动出现；从 DEFAULTS 移除但在 JSON 文件中存在的键会保留（如 `"LIGHTT"` 这样的拼写错误会一直保留，没有清理机制）。
+
+**颜色校验：** `ColorScheme.set_color()` 只接受 `ROLES_BASE + ROLES_CHART` 中的 10 个角色和 `#RRGGBB` 值。`settings.json` 属于不可信输入，因此它不能再覆盖 `LABEL_SIZE`、`set_color` 等其他类属性。
 
 **已知问题：**
 
-1. **文件未找到时按引用返回：** `load_settings()` 在 `settings.json` 缺失时直接返回模块级 `DEFAULTS` 字典（而非副本）。如果调用方修改返回的字典（如 `_save()` 执行 `self._settings["colors"] = {...}`），全局 `DEFAULTS` 常量被永久破坏。后续 `load_settings()` 调用返回用户上次保存的颜色而非出厂默认值。**这是首次运行时 `_reset()` 按钮恢复用户颜色而非出厂默认值的根本原因。** 修复方法：返回 `DEFAULTS.copy()` 而非 `DEFAULTS`。
+1. **静默 JSON 错误抑制：** 遇到 `JSONDecodeError` 或 `IOError` 时，函数返回 `DEFAULTS`，零日志或用户通知。带有尾随逗号的手动编辑 `settings.json` 被静默丢弃。更糟的是，自动保存链（`_save()` → `save_settings()`）立即**覆盖**损坏的文件为基于默认值的新状态，永久销毁所有可挽救的数据。**诊断方法：** 如果应用在编辑 settings.json 后以出厂默认值启动，请使用 `python -m json.tool settings.json` 检查 JSON 语法错误。
 
-2. **静默 JSON 错误抑制：** 遇到 `JSONDecodeError` 或 `IOError` 时，函数返回 `DEFAULTS`，零日志或用户通知。带有尾随逗号的手动编辑 `settings.json` 被静默丢弃。更糟的是，自动保存链（`_save()` → `save_settings()`）立即**覆盖**损坏的文件为基于默认值的新状态，永久销毁所有可挽救的数据。**诊断方法：** 如果应用在编辑 settings.json 后以出厂默认值启动，请使用 `python -m json.tool settings.json` 检查 JSON 语法错误。
-
-3. **从 DEFAULTS 移除的键永久保留：** 由于增量合并逻辑（步骤 5 使用 `{**DEFAULTS, **data}`），任何存在于用户 `settings.json` 中但随后从 `DEFAULTS` 移除的键（如重命名或删除的颜色角色）都会在内存中保留并在每次保存时写回磁盘。没有清理机制。定期检查 `settings.json` 中的陈旧条目。
+2. **从 DEFAULTS 移除的键永久保留：** 由于增量合并逻辑（步骤 3 逐键合并），任何存在于用户 `settings.json` 中但随后从 `DEFAULTS` 移除的键（如重命名或删除的颜色角色）都会在内存中保留并在每次保存时写回磁盘。没有清理机制。定期检查 `settings.json` 中的陈旧条目。
 
 ### 文件路径解析（`_get_settings_dir()` — 第 8-23 行）
 
@@ -923,7 +916,7 @@ def _get_settings_dir() -> str:
 
 ### 9. `sample_rate` 参数未连接到定时器
 
-`DEFAULTS["params"]` 中的 `sample_rate` 参数（settings_manager.py 第 48 行）跨会话存储和恢复，但从未在运行时用于更改 `QTimer` 间隔（在 ChartPanel 第 322 行固定为 500ms）。它作为用户可见的硬件配置参考参数存在，而非运行时控制。如需动态速率控制，将其连接到 `ChartPanel._timer.setInterval(sample_rate * 1000)`。
+`DEFAULTS["params"]` 中的 `sample_rate` 参数（settings_manager.py 第 50 行）跨会话存储和恢复，但从未在运行时用于更改 `QTimer` 间隔（在 ChartPanel 第 322 行固定为 500ms）。它作为用户可见的硬件配置参考参数存在，而非运行时控制。如需动态速率控制，将其连接到 `ChartPanel._timer.setInterval(sample_rate * 1000)`。
 
 ### 10. `refresh_colors()` 冗余设置每图表背景
 
@@ -1057,7 +1050,7 @@ def _reset(self):
         self.color_changed.emit(r, c)
 ```
 
-**注意：** 这需要先修复 `load_settings()` 返回 `DEFAULTS.copy()` 而非引用形式的 `DEFAULTS`（参见设置持久化 — 已知问题 #1）。否则 `DEFAULTS["colors"]` 在首次保存时被静默覆盖为用户颜色，重置按钮恢复用户颜色而非出厂默认值。
+**注意：** `load_settings()` 现在返回 `DEFAULTS` 的深拷贝，因此 `DEFAULTS["colors"]` 不会再被用户颜色污染，重置按钮可以放心读取它。
 
 ---
 

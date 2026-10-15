@@ -38,12 +38,15 @@ class ColorScheme:
 
     @classmethod
     def set_color(cls, role: str, hex_color: str) -> bool:
+        role = role.upper()
+        # Whitelist: hasattr() would also accept LABEL_SIZE, set_color, ...
+        # and settings.json is untrusted input.
+        if role not in ROLES_BASE and role not in ROLES_CHART:
+            return False
         if not HEX_PATTERN.match(hex_color):
             return False
-        if hasattr(cls, role.upper()):
-            setattr(cls, role.upper(), hex_color.upper())
-            return True
-        return False
+        setattr(cls, role, hex_color.upper())
+        return True
 
 
 def _adjust(hex_color: str, amount: int) -> str:
