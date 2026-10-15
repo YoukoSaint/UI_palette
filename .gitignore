@@ -1,3 +1,44 @@
-﻿__pycache__/
+﻿# Bytecode
+__pycache__/
 *.pyc
+*.pyo
+
+# User settings (generated at runtime)
 settings.json
+settings.*.tmp
+
+# Secrets and local tool config -- never commit
+.env
+.env.*
+*.pem
+*.key
+*.p12
+.claude/
+.claude.json
+settings.local.json
+secrets.*
+credentials*.json
+
+# Test / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+
+# Virtualenv
+venv/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output
+dist/
+build/
+*.egg-info/
